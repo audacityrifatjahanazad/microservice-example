@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  audit-db:
+    image: mongo
+    container_name: audit-db
+    ports:
+      - "27017:27017"
+    volumes:
+      - audit-db-data:/data/db
+    networks:
+      - microservice-net
+
+  leaderboard-db:
+    image: mongo
+    container_name: leaderboard-db
+    ports:
+      - "27018:27017"
+    volumes:
+      - leaderboard-db-data:/data/db
+    networks:
+      - microservice-net
+
+  service-timer:
+    build: ./service-timer
+    container_name: service-timer
+    ports:
+      - "3001:3001"
+    environment:
+      - MONGO_URI=mongodb://audit-db:27017/audit
+      - MOCK_DATE_SERVICE_URL=http://service-mock-date:3003
+      - LOGGER_SERVICE_URL=http://service-logger:3004
+      - PORT=3001
+    depends_on:
+      - audit-db
+      - service-mock-date
+      - service-logger
+    networks:
+      - microservice-net
+
+  service-leaderboard:
+    build: ./service-leaderboard
+    container_name: service-leaderboard
+    ports:
+      - "3002:3002"
+    environment:
+      - MONGO_URI=mongodb://leaderboard-db:27017/daily_leaders
+      - MOCK_DATE_SERVICE_URL=http://service-mock-date:3003
+      - TIMER_SERVICE_URL=http://service-timer:3001
+      - LOGGER_SERVICE_URL=http://service-logger:3004
+      - PORT=3002
+    depends_on:
+      - leaderboard-db
+      - service-mock-date
+      - service-timer
+      - service-logger
+    networks:
+      - microservice-net
+
+  service-mock-date:
+    build: ./service-mock-date
+    container_name: service-mock-date
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+    networks:
+      - microservice-net
+
+  service-logger:
+    build: ./service-logger
+    container_name: service-logger
+    ports:
+      - "3004:3004"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - PORT=3004
+    networks:
+      - microservice-net
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    container_name: swagger-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - URLS=[{"url":"http://localhost:3001/api-docs.json","name":"Timer Service"},{"url":"http://localhost:3002/api-docs.json","name":"Leaderboard Service"},{"url":"http://localhost:3003/api-docs.json","name":"Mock Date Service"},{"url":"http://localhost:3004/api-docs.json","name":"Logger Service"}]
+      # Note: Since swagger-ui runs in the browser, it needs localhost URLS if we access it from host machine. 
+      # BUT, CORS might be an issue. 
+      # Actually, the swagger-ui container serves the UI, but the UI makes requests to the backend. 
+      # Since we are mapping ports (3001-3004) to localhost, the browser can access them via localhost.
+      # If we used internal container names (e.g. service-audit), the browser wouldn't resolvable them.
+    networks:
+      - microservice-net
+
+volumes:
+  audit-db-data:
+  leaderboard-db-data:
+
+
+networks:
+  microservice-net:
+    driver: bridge
