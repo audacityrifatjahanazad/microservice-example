@@ -22,6 +22,7 @@ This project demonstrates a basic microservice architecture using Node.js, Expre
 4.  **Logger Service (Port 3004):**
     -   Centralized logging service.
     -   Writes logs to `logs/all.log` in the root directory.
+    -   
 
 ## Infrastructure
 
